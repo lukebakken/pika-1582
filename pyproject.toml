@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pika-1582"
+version = "0.1.0"
+description = "Reproducer and soak harness for pika PR #1582 (ThreadSafeConnection)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "BSD-3-Clause"
+authors = [{ name = "Luke Bakken" }]
+dependencies = [
+  "psutil>=5.9",
+]
+
+[tool.hatch.build]
+# This project is the harness, not a library; nothing to package as a wheel.
+skip-excluded-dirs = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pika_1582"]
+
+[tool.hatch.envs.default]
+dependencies = [
+  "psutil>=5.9",
+]
+# Force pip to install the local submodule in editable mode so changes to
+# pika-pika are picked up without reinstalling.
+post-install-commands = [
+  "pip install -e ./pika-pika",
+]
+
+[tool.hatch.envs.default.scripts]
+rabbit-up = "docker compose up -d rabbitmq"
+rabbit-down = "docker compose down"
+rabbit-logs = "docker compose logs -f rabbitmq"
+repro = "python -m pika_1582.repro {args}"
+soak = "python -m pika_1582.soak {args}"
+soak-quick = "python -m pika_1582.soak --duration 5m {args}"
