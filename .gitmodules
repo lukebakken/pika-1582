@@ -1,0 +1,4 @@
+[submodule "pika-pika"]
+	path = pika-pika
+	url = https://github.com/lukebakken/pika-pika.git
+	branch = feature/thread-safe-connection
