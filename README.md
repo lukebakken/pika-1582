@@ -24,6 +24,13 @@ hatch run soak-quick
 # Full 4-hour soak, the actual confidence-builder.
 hatch run soak
 
+# 1-minute publisher-confirms smoke test (stats every 30s, latency
+# percentiles, nack/pending/lat-budget detectors).
+hatch run confirms-quick
+
+# 5-minute publisher-confirms run.
+hatch run confirms
+
 # Stop and remove the broker.
 hatch run rabbit-down
 ```
@@ -38,6 +45,8 @@ hatch run rabbit-down
 | `hatch run repro` | Run the #1144 / #511 reproducer. Exits 0 on zero exceptions. |
 | `hatch run soak` | 4-hour soak with channel recycle and stats every 60s. |
 | `hatch run soak-quick` | 5-minute soak (same checks, shorter run, useful smoke test). |
+| `hatch run confirms` | 5-minute publisher-confirms run with per-message latency tracking. |
+| `hatch run confirms-quick` | 1-minute confirms smoke test. |
 
 All scripts accept `--help`. Common flags:
 
