@@ -18,7 +18,21 @@ not provide auto-reconnect; that is the user's responsibility.  A
 reopen path against a broker that goes away mid-run.  Worth doing once
 the basic soak has passed end-to-end multiple times.
 
-## 3. Slow consumer / backpressure
+## 3. Expose publish seqno from ThreadSafeChannel (pika upstream)
+
+The confirms harness currently reaches past `ThreadSafeChannel` to the
+raw `_channel` in order to record a publish timestamp in the same IOLoop
+turn as the actual `basic_publish`.  This keeps our sequence counter in
+lockstep with pika's internal delivery-tag counter.
+
+Users who want confirms with per-message latency tracking should not need
+to use private internals.  The fix is upstream in pika PR #1582: either
+expose a `pre_publish_hook` callback that fires on the IOLoop thread
+immediately before the raw publish, or return a `Future`-like handle
+carrying the delivery tag.  A TODO has been added to
+`ThreadSafeChannel.basic_publish`.
+
+## 4. Slow consumer / backpressure
 
 The current consumer acks immediately.  A variant that simulates slow
 work (e.g. `time.sleep(0.1)` per message with `prefetch_count=64`) would
