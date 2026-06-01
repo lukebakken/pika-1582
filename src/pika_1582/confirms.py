@@ -113,12 +113,12 @@ class Publisher:
 
         self._pending: dict[int, float] = {}
         self._pending_lock = threading.Lock()
-        self._next_seq = 0
 
         # Enable publisher confirms.  The callback runs on the per-channel
         # worker thread (single-threaded), so its mutations of _pending
-        # are serialized with respect to each other - we still hold the
-        # lock because the IOLoop thread is the other writer.
+        # are serialized with respect to each other — we still hold the
+        # lock because the on_publish callback (IOLoop thread) is the
+        # other writer.
         self.channel.confirm_delivery(self._on_confirm)
 
         self._threads: list[threading.Thread] = []
@@ -158,33 +158,27 @@ class Publisher:
                     next_at = time.monotonic()
 
     def _schedule_publish(self, properties: pika.BasicProperties) -> None:
-        """Hand a publish off to the IOLoop thread.
+        """Publish via ThreadSafeChannel with on_publish tracking.
 
-        The seqno bump and pending-record happen inside the same IOLoop
-        callback as the raw basic_publish, so our counter stays in
-        lockstep with pika's internal delivery-tag counter (which also
-        increments on the IOLoop thread).  We reach past the
-        ThreadSafeChannel wrapper to the raw channel because going
-        through ThreadSafeChannel.basic_publish would schedule a second
-        IOLoop hop and the seqno bump could land in a different turn
-        than the actual publish.
+        The on_publish callback fires on the IOLoop thread immediately
+        after the frame is written, with the delivery tag that the
+        broker will use for the confirm.  This keeps our pending-map in
+        lockstep with the broker's sequence without reaching into
+        private channel internals.
         """
-        body = self.body
-        ch = self.channel
+        self.channel.basic_publish(
+            exchange=EXCHANGE_NAME,
+            routing_key=ROUTING_KEY,
+            body=self.body,
+            properties=properties,
+            on_publish=self._on_publish,
+        )
 
-        def _do_publish():
-            with self._pending_lock:
-                self._next_seq += 1
-                seq = self._next_seq
-                self._pending[seq] = time.monotonic()
-            ch._channel.basic_publish(
-                exchange=EXCHANGE_NAME,
-                routing_key=ROUTING_KEY,
-                body=body,
-                properties=properties,
-            )
-
-        self.conn.add_callback_threadsafe(_do_publish)
+    def _on_publish(self, delivery_tag: int) -> None:
+        """Called on the IOLoop thread immediately after a publish frame is
+        written.  Records the publish timestamp keyed by the delivery tag."""
+        with self._pending_lock:
+            self._pending[delivery_tag] = time.monotonic()
 
     def _on_confirm(self, method_frame) -> None:
         """Broker ack/nack callback - runs on the per-channel worker."""
